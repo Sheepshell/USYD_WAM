@@ -1,2 +1,3 @@
 # USYD WAM & HWAM calculater
-HWAM is for engineering and IT students only.
+Have a look on https://usydwamcalculator.streamlit.app/ if you wants to know your wam or hwam.
+Note: HWAM is for engineering and IT students only.
