@@ -114,7 +114,7 @@ if uploaded_file is not None:
     wam = wam["WAM"].values[0]
     st.write("wam:", wam)
 
-    try:
+    if sum(level) != 0:
         # calculate the hwam : Mark*Credit Points*level/Credit Points*level
         hwam = df[df["Mark"] != "-"]
         hwam = hwam[hwam["Level"] != 0]
@@ -132,7 +132,7 @@ if uploaded_file is not None:
         # show the hwam to one word
         hwam = hwam["HWAM"].values[0]
         st.write("hwam:", hwam)
-    except:
+    else:
         st.write("hwam: First year got no hwam!")
 
 
