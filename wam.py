@@ -114,26 +114,24 @@ if uploaded_file is not None:
     wam = wam["WAM"].values[0]
     st.write("wam:", wam)
 
-    if sum(level) != 0:
-        # calculate the hwam : Mark*Credit Points*level/Credit Points*level
-        hwam = df[df["Mark"] != "-"]
-        hwam = hwam[hwam["Level"] != 0]
-        hwam["Mark"] = hwam["Mark"].astype(float)
-        hwam["Credit Points"] = hwam["Credit Points"].astype(float)
-        hwam["Level"] = hwam["Level"].astype(float)
-        hwam["Mark*Credit Points*level"] = hwam["Mark"] * hwam["Credit Points"] * hwam["Level"]
-        hwam["Credit Points*level"] = hwam["Credit Points"] * hwam["Level"]
-        hwam["Mark*Credit Points*level"] = hwam["Mark*Credit Points*level"].sum()
-        hwam["Credit Points*level"] = hwam["Credit Points*level"].sum()
-        hwam["HWAM"] = hwam["Mark*Credit Points*level"] / hwam["Credit Points*level"]
-        hwam["HWAM"] = hwam["HWAM"].round(2)
-        hwam = hwam.drop(columns=["Mark", "Grade", "Credit Points", "Mark*Credit Points*level", "Credit Points*level", "Level"])
-        hwam = hwam.drop_duplicates()
-        # show the hwam to one word
-        hwam = hwam["HWAM"].values[0]
-        st.write("hwam:", hwam)
-    else:
-        st.write("hwam: First year got no hwam!")
+    # calculate the hwam : Mark*Credit Points*level/Credit Points*level
+    hwam = df[df["Mark"] != "-"]
+    hwam = hwam[hwam["Level"] != 0]
+    hwam["Mark"] = hwam["Mark"].astype(float)
+    hwam["Credit Points"] = hwam["Credit Points"].astype(float)
+    hwam["Level"] = hwam["Level"].astype(float)
+    hwam["Mark*Credit Points*level"] = hwam["Mark"] * hwam["Credit Points"] * hwam["Level"]
+    hwam["Credit Points*level"] = hwam["Credit Points"] * hwam["Level"]
+    hwam["Mark*Credit Points*level"] = hwam["Mark*Credit Points*level"].sum()
+    hwam["Credit Points*level"] = hwam["Credit Points*level"].sum()
+    hwam["HWAM"] = hwam["Mark*Credit Points*level"] / hwam["Credit Points*level"]
+    hwam["HWAM"] = hwam["HWAM"].round(2)
+    hwam = hwam.drop(columns=["Mark", "Grade", "Credit Points", "Mark*Credit Points*level", "Credit Points*level", "Level"])
+    hwam = hwam.drop_duplicates()
+    # show the hwam to one word
+    hwam = hwam["HWAM"].values[0]
+    st.write("hwam:", hwam)
+
 
 
 
