@@ -1,3 +1,2 @@
 PyPDF2
 matplotlib
-platform
