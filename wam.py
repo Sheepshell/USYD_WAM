@@ -12,8 +12,8 @@ LANG_DICT = {
         "rules": "1. **WAM**: 普通加权平均分 。\n2. **EIHWAM**: 荣誉加权平均分 (Wi: 1000级=0, 2000级=2, 3000级=3, 4000级+=4, Thesis=8)。",
         "upload_label": "请上传你的 Academic Transcript (PDF) 从Sydneystudent → My studies → Assessment → View academic transcript → Printable version",
         "sidebar_lang": "选择语言",
-        "result_wam": "当前总 WAM (精确)",
-        "result_hwam": "当前总 EIHWAM (精确)",
+        "result_wam": "当前总 WAM",
+        "result_hwam": "当前总 EIHWAM",
         "chart_title": "学期表现趋势",
         "chart_legend_sem_wam": "Sem Avg",
         "chart_legend_cum_wam": "Cum. WAM",
@@ -27,8 +27,8 @@ LANG_DICT = {
         "rules": "1. **WAM**: Weighted Average Mark.\n2. **EIHWAM**: Honours WAM (Wi: 1000=0, 2000=2, 3000=3, 4000+=4, Thesis=8).",
         "upload_label": "Upload Academic Transcript (PDF) from Sydneystudent → My studies → Assessment → View academic transcript → Printable version",
         "sidebar_lang": "Select Language",
-        "result_wam": "Total WAM (Precise)",
-        "result_hwam": "Total EIHWAM (Precise)",
+        "result_wam": "Total WAM",
+        "result_hwam": "Total EIHWAM",
         "chart_title": "Semester Trends",
         "chart_legend_sem_wam": "Sem Avg",
         "chart_legend_cum_wam": "Cum. WAM",
@@ -153,6 +153,7 @@ if uploaded_file:
         st.pyplot(fig)
     else:
         st.error("Data Extraction Failed.")
+
 
 
 
