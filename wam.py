@@ -3,25 +3,7 @@ import pandas as pd
 import PyPDF2
 import re
 import matplotlib.pyplot as plt
-import platform
-# --- 1. 解决中文字体显示问题的配置 ---
-def set_chinese_font():
-    system = platform.system()
-    if system == "Windows":
-        # Windows 常用黑体
-        plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'SimSun']
-    elif system == "Darwin": # macOS
-        # macOS 常用黑体
-        plt.rcParams['font.sans-serif'] = ['Arial Unicode MS', 'Heiti TC', 'STHeiti']
-    else:
-        # Linux/其他 (如果安装了文泉驿)
-        plt.rcParams['font.sans-serif'] = ['WenQuanYi Micro Hei']
-    
-    # 解决负号显示为方块的问题
-    plt.rcParams['axes.unicode_minus'] = False
 
-# 在程序开始时调用
-set_chinese_font()
 # --- 语言配置 (保持不变) ---
 LANG_DICT = {
     "zh": {
@@ -33,9 +15,9 @@ LANG_DICT = {
         "result_wam": "当前总 WAM (精确)",
         "result_hwam": "当前总 EIHWAM (精确)",
         "chart_title": "学期表现趋势",
-        "chart_legend_sem_wam": "当学期均分",
-        "chart_legend_cum_wam": "累计总 WAM",
-        "chart_legend_cum_eihwam": "累计荣誉 EIHWAM",
+        "chart_legend_sem_wam": "Sem Avg",
+        "chart_legend_cum_wam": "Cum. WAM",
+        "chart_legend_cum_eihwam": "Cum. EIHWAM",
         "table_header": "课程数据详情",
         "footer": "注：计算结果及绘图仅供参考，最终学位等级请以学校官方为准。"
     },
@@ -171,5 +153,6 @@ if uploaded_file:
         st.pyplot(fig)
     else:
         st.error("Data Extraction Failed.")
+
 
 
