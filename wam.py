@@ -1,137 +1,155 @@
-import PyPDF2
-import pandas as pd
 import streamlit as st
+import pandas as pd
+import PyPDF2
+import re
+import matplotlib.pyplot as plt
 
-def extract_text_from_pdf_pypdf2(file):
+# --- 语言配置 (保持不变) ---
+LANG_DICT = {
+    "zh": {
+        "title": "🎓 悉尼大学工程学院 WAM & EIHWAM 助手",
+        "description": "按学期精准统计你的学业表现，已修正精度显示问题。",
+        "rules": "1. **WAM**: 普通加权平均分 。\n2. **EIHWAM**: 荣誉加权平均分 (Wi: 1000级=0, 2000级=2, 3000级=3, 4000级+=4, Thesis=8)。",
+        "upload_label": "请上传你的 Academic Transcript (PDF) 从Sydneystudent → My studies → Assessment → View academic transcript → Printable version",
+        "sidebar_lang": "选择语言",
+        "result_wam": "当前总 WAM (精确)",
+        "result_hwam": "当前总 EIHWAM (精确)",
+        "chart_title": "学期表现趋势",
+        "chart_legend_sem_wam": "当学期均分",
+        "chart_legend_cum_wam": "累计总 WAM",
+        "chart_legend_cum_eihwam": "累计荣誉 EIHWAM",
+        "table_header": "课程数据详情",
+        "footer": "注：计算结果及绘图仅供参考，最终学位等级请以学校官方为准。"
+    },
+    "en": {
+        "title": "🎓 USYD Engineering WAM & EIHWAM Assistant",
+        "description": "Semester-by-semester tracking with precision fix.",
+        "rules": "1. **WAM**: Weighted Average Mark.\n2. **EIHWAM**: Honours WAM (Wi: 1000=0, 2000=2, 3000=3, 4000+=4, Thesis=8).",
+        "upload_label": "Upload Academic Transcript (PDF) from Sydneystudent → My studies → Assessment → View academic transcript → Printable version",
+        "sidebar_lang": "Select Language",
+        "result_wam": "Total WAM (Precise)",
+        "result_hwam": "Total EIHWAM (Precise)",
+        "chart_title": "Semester Trends",
+        "chart_legend_sem_wam": "Sem Avg",
+        "chart_legend_cum_wam": "Cum. WAM",
+        "chart_legend_cum_eihwam": "Cum. EIHWAM",
+        "table_header": "Course Details",
+        "footer": "Note: Results are for reference only[cite: 4]."
+    }
+}
+
+def extract_data_from_pdf(file):
     pdf_reader = PyPDF2.PdfReader(file)
-    text = ""
-    try:
-        for number in range(10):
-            page = pdf_reader.pages[number]
-            text += page.extract_text()
-    except IndexError:
-        pass
-    return text
+    full_text = ""
+    for page in pdf_reader.pages:
+        full_text += page.extract_text() + "\n"
+    
+    pattern = re.compile(r'(\d{4})\s+([S\d]\d[A-Z])\s+([A-Z]{4}\d{4})\s+(.*?)\s+(\d{1,3}\.\d|)\s*([A-Z]{2})\s+(\d+)')
+    rows = []
+    for m in pattern.findall(full_text):
+        session_raw = m[1]
+        sem_norm = "S1" if ("S1" in session_raw or "51" in session_raw) else "S2"
+        rows.append({
+            "Year": int(m[0]),
+            "Semester": sem_norm,
+            "Display_Label": f"{m[0]} {sem_norm}",
+            "Code": m[2],
+            "Name": m[3].strip(),
+            "Mark": float(m[4]) if m[4] else None,
+            "Grade": m[5],
+            "CP": int(m[6])
+        })
+    return pd.DataFrame(rows)
 
+def calculate_metrics(df):
+    # 排除不计入 WAM 的成绩
+    excluded_grades = ['CN', 'DC', 'DF', 'SR', 'UC']
+    df = df.dropna(subset=['Mark']).copy()
+    df = df[~df['Grade'].isin(excluded_grades)]
+    
+    # 权重 Wi 分配
+    def get_weight(row):
+        code, name = row['Code'], row['Name'].lower()
+        level = code[4]
+        if 'thesis' in name or 'project' in name: return 8 # Thesis 权重 8
+        weights = {'1': 0, '2': 2, '3': 3} # 1000:0, 2000:2, 3000:3
+        return weights.get(level, 4) # 4000+:4
 
-st.title("WAM&HWAM Calculator")
-st.write("This is a simple web application that can calculate your WAM and HWAM based on your transcript.")
-st.write("Please upload your transcript in PDF format.")
-st.write("Sydneystudent -> My studies -> Assessment -> View academic transcript -> Printable version")
+    df['Wi'] = df.apply(get_weight, axis=1)
+    
+    sem_map = {"S1": 1, "S2": 2}
+    df['SortKey'] = df['Year'] * 10 + df['Semester'].map(sem_map)
+    df = df.sort_values('SortKey')
+    
+    history = []
+    unique_sems = df['SortKey'].unique()
+    
+    for skey in unique_sems:
+        current_sem_df = df[df['SortKey'] == skey]
+        cumulative_df = df[df['SortKey'] <= skey]
+        
+        sem_wam = (current_sem_df['Mark'] * current_sem_df['CP']).sum() / current_sem_df['CP'].sum()
+        cum_wam = (cumulative_df['Mark'] * cumulative_df['CP']).sum() / cumulative_df['CP'].sum()
+        
+        # EIHWAM 计算
+        eih_num = (cumulative_df['Mark'] * cumulative_df['CP'] * cumulative_df['Wi']).sum()
+        eih_den = (cumulative_df['CP'] * cumulative_df['Wi']).sum()
+        cum_eihwam = eih_num / eih_den if eih_den != 0 else 0
+        
+        # 此处保留 4 位精度，仅在显示时格式化，避免累积误差
+        history.append({
+            "Label": current_sem_df['Display_Label'].iloc[0],
+            "Sem_Avg": round(float(sem_wam), 4),
+            "Cum_WAM": round(float(cum_wam), 4),
+            "Cum_EIHWAM": round(float(cum_eihwam), 4)
+        })
+    
+    return pd.DataFrame(history), df
 
-uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
+# --- UI 展示 ---
+st.set_page_config(page_title="USYD Precision WAM", layout="wide")
+lang_choice = st.sidebar.selectbox("Language / 语言", ["中文", "English"])
+t = LANG_DICT["zh"] if lang_choice == "中文" else LANG_DICT["en"]
 
-if uploaded_file is not None:
+st.title(t["title"])
+uploaded_file = st.file_uploader(t["upload_label"], type="pdf")
 
-    text = extract_text_from_pdf_pypdf2(uploaded_file)
-    # Delete the anything before the third occurrence of the word Credit points
-    text = text[text.find("Credit points") + len("Credit points"):]
-    text = text[text.find("Credit points") + len("Credit points"):]
-    # Delete the anything after the last occurrence of the word Credit points gained 
-    text = text[:text.rfind("Credit points gained")]
+if uploaded_file:
+    df_raw = extract_data_from_pdf(uploaded_file)
+    if not df_raw.empty:
+        hist_df, full_data = calculate_metrics(df_raw)
+        
+        latest = hist_df.iloc[-1]
+        c1, c2 = st.columns(2)
+        # 强制显示两位小数以符合用户需求
+        c1.metric(t["result_wam"], f"{latest['Cum_WAM']:.2f}")
+        c2.metric(t["result_hwam"], f"{latest['Cum_EIHWAM']:.2f}")
 
-    def is_mark(text):
-        if '.' not in text:
-            return False
-        try:
-            num = float(text)
-            return 0 <= num <= 100
-        except ValueError:
-            return False
+        # 绘图区域 (数值标注也改为两位小数)
+        st.subheader(t["chart_title"])
+        fig, ax = plt.subplots(figsize=(12, 6))
+        
+        x_labels = hist_df['Label']
+        lines = [
+            (hist_df['Sem_Avg'], t["chart_legend_sem_wam"], 'o--', '#BDBDBD'),
+            (hist_df['Cum_WAM'], t["chart_legend_cum_wam"], 's-', '#3498DB'),
+            (hist_df['Cum_EIHWAM'], t["chart_legend_cum_eihwam"], 'D-', '#E74C3C')
+        ]
 
-    year = []
-    session = []
-    unit_of_study_code = []
-    mark = []
-    grade = []
-    credit_points = []
-    level = []
+        for data, label, style, color in lines:
+            ax.plot(x_labels, data, style, label=label, color=color, markersize=8, linewidth=2)
+            for i, val in enumerate(data):
+                ax.annotate(f"{val:.2f}", # 此处更新为 2 位小数
+                            (x_labels[i], data[i]), 
+                            xytext=(0, 8), 
+                            textcoords='offset points', 
+                            ha='center', 
+                            fontweight='bold', 
+                            color=color)
 
-
-    session_code = [
-        "S1C", "S1CG", "S1CIAP", "S1CIFE", "S1CIJA", "S1CIJN", "S1CIMR", "S1CIMY", "S1CMBA", "S1CNDP", 
-        "S1CRA", "S1CRB", "S1CRR1", "S1CRR2", "S1CVP1", "S1CVP2", "S1CVP3", "S1CVP4", "S1CVP5", "S1CVP6", 
-        "S2C", "S2CE", "S2CG", "S2CIAU", "S2CIDE", "S2CIJL", "S2CINO", "S2CIOC", "S2CISE", "S2CMBA", 
-        "S2CNDP", "S2CRA", "S2CRB", "S2CREA", "S2CREB", "S2CRR3", "S2CRR4", "S2CVP1", "S2CVP2", "S2CVP3", 
-        "S2CVP4", "S2CVP5", "S2CVP6"
-    ]
-
-    grade_code_with_mark = ["HD", "DI", "CR", "PS", "FA"]
-    grade_code_without_mark = ["AF", "CN", "DC", "DF", "FR", "SR", "WD", "IC", "RI", "UC"]
-
-    for word in text.split():
-        if word.isdigit() and len(word) == 4:
-            year.append(word)
-        elif word in session_code:
-            session.append(word)
-        elif word.isupper() and len(word) == 8:
-            unit_of_study_code.append(word)
-        elif is_mark(word):
-            mark.append(word)
-        elif word in grade_code_with_mark or word in grade_code_without_mark:
-            grade.append(word)
-        elif word.isdigit() and len(word) <= 2 and (last_word in grade_code_with_mark or last_word in grade_code_without_mark):
-            credit_points.append(word)
-        last_word = word
-
-    for i in range(len(grade)):
-        if grade[i] in grade_code_without_mark:
-            mark.insert(i, "-")
-
-    for code in unit_of_study_code:
-        if code[4] == "1":
-            level.append(0)
-        elif code[4] <= "4":
-            level.append(code[4])
-        else:
-            level.append(4)
-
-    # Create a DataFrame
-    df = pd.DataFrame({
-        "Year": year,
-        "Session": session,
-        "Unit of Study Code": unit_of_study_code,
-        "Mark": mark,
-        "Grade": grade,
-        "Credit Points": credit_points,
-        "Level": level
-    })
-
-    # calculate the wam : Mark*Credit Points/Credit Points
-    pd.options.mode.chained_assignment = None  # 默认为 'warn'
-    wam = df[df["Mark"] != "-"]
-    wam["Mark"] = wam["Mark"].astype(float)
-    wam["Credit Points"] = wam["Credit Points"].astype(float)
-    wam["Mark*Credit Points"] = wam["Mark"] * wam["Credit Points"]
-    wam["Credit Points"] = wam["Credit Points"].astype(float)
-    wam["Credit Points"] = wam["Credit Points"].sum()
-    wam["Mark*Credit Points"] = wam["Mark*Credit Points"].sum()
-    wam["WAM"] = wam["Mark*Credit Points"] / wam["Credit Points"]
-    wam["WAM"] = wam["WAM"].round(2)
-    wam = wam.drop(columns=["Mark", "Grade", "Credit Points", "Mark*Credit Points"])
-    wam = wam.drop_duplicates()
-    # show the wam to one word
-    wam = wam["WAM"].values[0]
-    st.write("wam:", wam)
-
-    # calculate the hwam : Mark*Credit Points*level/Credit Points*level
-    hwam = df[df["Mark"] != "-"]
-    hwam = hwam[hwam["Level"] != 0]
-    hwam["Mark"] = hwam["Mark"].astype(float)
-    hwam["Credit Points"] = hwam["Credit Points"].astype(float)
-    hwam["Level"] = hwam["Level"].astype(float)
-    hwam["Mark*Credit Points*level"] = hwam["Mark"] * hwam["Credit Points"] * hwam["Level"]
-    hwam["Credit Points*level"] = hwam["Credit Points"] * hwam["Level"]
-    hwam["Mark*Credit Points*level"] = hwam["Mark*Credit Points*level"].sum()
-    hwam["Credit Points*level"] = hwam["Credit Points*level"].sum()
-    hwam["HWAM"] = hwam["Mark*Credit Points*level"] / hwam["Credit Points*level"]
-    hwam["HWAM"] = hwam["HWAM"].round(2)
-    hwam = hwam.drop(columns=["Mark", "Grade", "Credit Points", "Mark*Credit Points*level", "Credit Points*level", "Level"])
-    hwam = hwam.drop_duplicates()
-    # show the hwam to one word
-    hwam = hwam["HWAM"].values[0]
-    st.write("hwam:", hwam)
-
-
-
-
+        ax.set_ylim(min(hist_df['Sem_Avg'].min(), 60) - 5, 100)
+        ax.grid(True, axis='y', linestyle=':', alpha=0.5)
+        ax.legend(loc='upper left', bbox_to_anchor=(1, 1))
+        st.pyplot(fig)
+    else:
+        st.error("Data Extraction Failed.")
