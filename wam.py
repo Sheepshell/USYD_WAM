@@ -4,12 +4,12 @@ import PyPDF2
 import re
 import matplotlib.pyplot as plt
 
-# --- 语言配置 (保持不变) ---
+# --- 语言配置 ---
 LANG_DICT = {
     "zh": {
         "title": "🎓 悉尼大学工程学院 WAM & EIHWAM 助手",
         "description": "按学期精准统计你的学业表现，已修正精度显示问题。",
-        "rules": "1. **WAM**: 普通加权平均分 。\n2. **EIHWAM**: 荣誉加权平均分 (Wi: 1000级=0, 2000级=2, 3000级=3, 4000级+=4, Thesis=8)。",
+        "rules": "1. **WAM**: 普通加权平均分。\n2. **EIHWAM**: 荣誉加权平均分 (Wi: 1000级=0, 2000级=2, 3000级=3, 4000级+=4, Thesis=8)。",
         "upload_label": "请上传你的 Academic Transcript (PDF) 从Sydneystudent → My studies → Assessment → View academic transcript → Printable version",
         "sidebar_lang": "选择语言",
         "result_wam": "当前总 WAM",
@@ -34,7 +34,7 @@ LANG_DICT = {
         "chart_legend_cum_wam": "Cum. WAM",
         "chart_legend_cum_eihwam": "Cum. EIHWAM",
         "table_header": "Course Details",
-        "footer": "Note: Results are for reference only[cite: 4]."
+        "footer": "Note: Results are for reference only."
     }
 }
 
@@ -44,6 +44,7 @@ def extract_data_from_pdf(file):
     for page in pdf_reader.pages:
         full_text += page.extract_text() + "\n"
     
+    # 正则匹配课程行
     pattern = re.compile(r'(\d{4})\s+([S\d]\d[A-Z])\s+([A-Z]{4}\d{4})\s+(.*?)\s+(\d{1,3}\.\d|)\s*([A-Z]{2})\s+(\d+)')
     rows = []
     for m in pattern.findall(full_text):
@@ -62,18 +63,17 @@ def extract_data_from_pdf(file):
     return pd.DataFrame(rows)
 
 def calculate_metrics(df):
-    # 排除不计入 WAM 的成绩
     excluded_grades = ['CN', 'DC', 'DF', 'SR', 'UC']
     df = df.dropna(subset=['Mark']).copy()
     df = df[~df['Grade'].isin(excluded_grades)]
     
-    # 权重 Wi 分配
+    # 按照官方 Wi 规则
     def get_weight(row):
         code, name = row['Code'], row['Name'].lower()
         level = code[4]
-        if 'thesis' in name or 'project' in name: return 8 # Thesis 权重 8
-        weights = {'1': 0, '2': 2, '3': 3} # 1000:0, 2000:2, 3000:3
-        return weights.get(level, 4) # 4000+:4
+        if 'thesis' in name or 'project' in name: return 8
+        weights = {'1': 0, '2': 2, '3': 3}
+        return weights.get(level, 4)
 
     df['Wi'] = df.apply(get_weight, axis=1)
     
@@ -91,12 +91,11 @@ def calculate_metrics(df):
         sem_wam = (current_sem_df['Mark'] * current_sem_df['CP']).sum() / current_sem_df['CP'].sum()
         cum_wam = (cumulative_df['Mark'] * cumulative_df['CP']).sum() / cumulative_df['CP'].sum()
         
-        # EIHWAM 计算
+        # EIHWAM 公式
         eih_num = (cumulative_df['Mark'] * cumulative_df['CP'] * cumulative_df['Wi']).sum()
         eih_den = (cumulative_df['CP'] * cumulative_df['Wi']).sum()
         cum_eihwam = eih_num / eih_den if eih_den != 0 else 0
         
-        # 此处保留 4 位精度，仅在显示时格式化，避免累积误差
         history.append({
             "Label": current_sem_df['Display_Label'].iloc[0],
             "Sem_Avg": round(float(sem_wam), 4),
@@ -121,11 +120,9 @@ if uploaded_file:
         
         latest = hist_df.iloc[-1]
         c1, c2 = st.columns(2)
-        # 强制显示两位小数以符合用户需求
         c1.metric(t["result_wam"], f"{latest['Cum_WAM']:.2f}")
         c2.metric(t["result_hwam"], f"{latest['Cum_EIHWAM']:.2f}")
 
-        # 绘图区域 (数值标注也改为两位小数)
         st.subheader(t["chart_title"])
         fig, ax = plt.subplots(figsize=(12, 6))
         
@@ -137,10 +134,20 @@ if uploaded_file:
         ]
 
         for data, label, style, color in lines:
-            ax.plot(x_labels, data, style, label=label, color=color, markersize=8, linewidth=2)
-            for i, val in enumerate(data):
-                ax.annotate(f"{val:.2f}", # 此处更新为 2 位小数
-                            (x_labels[i], data[i]), 
+            # 逻辑：如果是荣誉累计均分，且数据点多于2个，则从第3个点（索引2）开始画
+            if label == t["chart_legend_cum_eihwam"] and len(data) > 2:
+                plot_x = x_labels[2:]
+                plot_y = data[2:]
+            else:
+                plot_x = x_labels
+                plot_y = data
+
+            ax.plot(plot_x, plot_y, style, label=label, color=color, markersize=8, linewidth=2)
+            
+            for i, val in enumerate(plot_y):
+                # 获取对应的 X 轴标签（通过重置后的索引或 .iloc）
+                ax.annotate(f"{val:.2f}", 
+                            (plot_x.iloc[i], val), 
                             xytext=(0, 8), 
                             textcoords='offset points', 
                             ha='center', 
@@ -153,7 +160,3 @@ if uploaded_file:
         st.pyplot(fig)
     else:
         st.error("Data Extraction Failed.")
-
-
-
-
