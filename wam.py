@@ -3,7 +3,24 @@ import pandas as pd
 import PyPDF2
 import re
 import matplotlib.pyplot as plt
+# --- 1. 解决中文字体显示问题的配置 ---
+def set_chinese_font():
+    system = platform.system()
+    if system == "Windows":
+        # Windows 常用黑体
+        plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'SimSun']
+    elif system == "Darwin": # macOS
+        # macOS 常用黑体
+        plt.rcParams['font.sans-serif'] = ['Arial Unicode MS', 'Heiti TC', 'STHeiti']
+    else:
+        # Linux/其他 (如果安装了文泉驿)
+        plt.rcParams['font.sans-serif'] = ['WenQuanYi Micro Hei']
+    
+    # 解决负号显示为方块的问题
+    plt.rcParams['axes.unicode_minus'] = False
 
+# 在程序开始时调用
+set_chinese_font()
 # --- 语言配置 (保持不变) ---
 LANG_DICT = {
     "zh": {
@@ -153,3 +170,4 @@ if uploaded_file:
         st.pyplot(fig)
     else:
         st.error("Data Extraction Failed.")
+
